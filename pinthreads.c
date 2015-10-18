@@ -168,7 +168,17 @@ int main(int argc, char **argv){
    argv +=  optind;
 
    char *lib = get_lib_path();
-   setenv("LD_PRELOAD", lib, 1);
+   char *old = getenv("LD_PRELOAD");
+   char buffer[1024] = { 0 };
+
+   if (old != NULL) {
+     strcpy(buffer, old);
+     strcat(buffer, ":");
+     strcat(buffer, lib);
+     setenv("LD_PRELOAD", buffer, 1);
+   } else {
+     setenv("LD_PRELOAD", lib, 1);
+   }
    free(lib);
 
    int *cores_array;
