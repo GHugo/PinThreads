@@ -92,6 +92,7 @@ void *server(void *data) {
       perror("listen");
       exit(1);
    }
+   while(1) { sleep (9999999); }
 
    for(;;) {
       if ((s2 = accept(s, &remote, &sock_size)) == -1) {
