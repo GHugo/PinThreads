@@ -34,6 +34,7 @@ static void set_affinity(pid_t tid, int cpu_id) {
    }
 }
 
+#define MAGIC_NUMBER 0xdeedbeaf
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg) {
    int core;
    int ret;
@@ -41,6 +42,11 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
    CPU_ZERO(&mask);
 
    ret = old_pthread_create(thread, attr, start_routine, arg);
+
+   // Hack: if arg == MAGIC_NUMBER, ignore the thread
+   if (arg == (void*)MAGIC_NUMBER) {
+     return ret;
+   }
 
    if(!get_shm()->active)
      return ret;
