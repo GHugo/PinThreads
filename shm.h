@@ -6,7 +6,7 @@
 struct shared_state {
    int refcount;
    int next_core;
-   pthread_mutex_t pin_lock;
+   int server_init;
    int verbose;
    int verbose_err;
    int server;
@@ -24,8 +24,5 @@ void cleanup_shm(char *id);
 struct shared_state *get_shm(void);
 char *get_shm_size(void);
 int get_next_core(void);
-
-void lock_shm(void);
-void unlock_shm(void);
 
 #endif

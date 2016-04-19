@@ -7,22 +7,12 @@ struct shared_state *get_shm(void) {
    return shm;
 }
 
-void lock_shm(void) {
-   pthread_mutex_lock(&shm->pin_lock);
-}
-
-void unlock_shm(void) {
-   pthread_mutex_unlock(&shm->pin_lock);
-}
-
 int get_next_core() {
    assert(shm);
 
-   pthread_mutex_lock(&shm->pin_lock);
-   int ret, core = shm->next_core;
-   shm->next_core = (shm->next_core + 1) % (shm->nr_entries_in_cores);
-   ret = shm->cores[core];
-   pthread_mutex_unlock(&shm->pin_lock);
+   int ret;
+   int core = __sync_add_and_fetch(&shm->next_core, 1);
+   ret = shm->cores[core % (shm->nr_entries_in_cores)];
 
    return ret;
 }
@@ -56,16 +46,12 @@ struct shared_state *_create_shm(char *id, int create, struct shared_state *cont
       int i;
       memcpy(shm, content, sizeof(*content));
       shm->next_core = 0;
-      shm->refcount = 0;
+      shm->refcount = 1;
       shm->server_fd = -1;
+      shm->server_init = 0;
       shm->active = 1;
       for(i = 0; i < content->nr_entries_in_cores; i++)
          shm->cores[i] = cores[i];
-      pthread_mutex_init(&shm->pin_lock, NULL);
-   } else {
-      pthread_mutex_lock(&shm->pin_lock);
-      shm->refcount++;
-      pthread_mutex_unlock(&shm->pin_lock);
    }
 
    fclose(shmf);
@@ -94,9 +80,7 @@ struct shared_state *restore_shm(char *id, char *size) {
 void cleanup_shm(char *id) {
    int free_shm = 0;
 
-   pthread_mutex_lock(&shm->pin_lock);
-   shm->refcount--;
-
+   __sync_fetch_and_sub(&shm->refcount, 1);
    assert(shm->refcount >= 0);
 
    if(shm->refcount == 0) {
@@ -116,7 +100,6 @@ void cleanup_shm(char *id) {
 	free(path);
       }
    }
-   pthread_mutex_unlock(&shm->pin_lock);
 
    shmdt(shm);
 

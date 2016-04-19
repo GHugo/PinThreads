@@ -57,34 +57,38 @@ void *server(void *data) {
    socklen_t sock_size = sizeof(remote);
    char *path = NULL;
 
-   lock_shm();
+   
    if(get_shm()->server_fd == -1) {
-
-      /* allow user to set suffix to facilitate socket retrieval */
-      char *suffix = getenv("PINTHREADS_SOCK_SUFFIX");
-      if (suffix == NULL)
- 	 assert(asprintf(&path, "%s_sock", getenv("PINTHREADS_SHMID")));
-      else
- 	 assert(asprintf(&path, "%s_%s_sock", getenv("PINTHREADS_SHMID"), suffix));
-
-      if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-         perror("socket");
-         exit(1);
+       int server_init = __sync_fetch_and_add(&get_shm()->server_init, 1);
+       if (server_init == 0) {
+        /* allow user to set suffix to facilitate socket retrieval */
+        char *suffix = getenv("PINTHREADS_SOCK_SUFFIX");
+        if (suffix == NULL)
+   	 assert(asprintf(&path, "%s_sock", getenv("PINTHREADS_SHMID")));
+        else
+   	 assert(asprintf(&path, "%s_%s_sock", getenv("PINTHREADS_SHMID"), suffix));
+  
+        if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+           perror("socket");
+           exit(1);
+        }
+  
+        local.sun_family = AF_UNIX;
+        strcpy(local.sun_path, path);
+        len = strlen(local.sun_path) + sizeof(local.sun_family);
+        if (bind(s, (struct sockaddr *)&local, len) == -1) {
+           perror("bind");
+           exit(1);
+        }
+  
+        get_shm()->server_fd = s;
       }
-
-      local.sun_family = AF_UNIX;
-      strcpy(local.sun_path, path);
-      len = strlen(local.sun_path) + sizeof(local.sun_family);
-      if (bind(s, (struct sockaddr *)&local, len) == -1) {
-         perror("bind");
-         exit(1);
-      }
-
-      get_shm()->server_fd = s;
+       // Another thread is initializing the server, wait for it
+       while (get_shm()->server_fd == -1);
+       s = get_shm()->server_fd;
    } else {
       s = get_shm()->server_fd;
    }
-   unlock_shm();
 
    sem_post(&_sem_init);
 

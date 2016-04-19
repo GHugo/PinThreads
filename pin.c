@@ -85,15 +85,16 @@ int sched_setaffinity(pid_t pid, size_t cpusetsize, const cpu_set_t *mask) {
 pid_t fork(void) {
    pid_t ret;
 
-   // When a new process is forked, the refcounter must be incremented
-   pthread_mutex_lock(&get_shm()->pin_lock);
-   get_shm()->refcount++;
-   pthread_mutex_unlock(&get_shm()->pin_lock);
+   // Increment refcount on fork to avoid parent dying before child and destroying the shm
+   __sync_fetch_and_add(&get_shm()->refcount, 1);
 
    ret = old_fork();
    if(ret > 0) {
       set_affinity(ret, get_next_core());
-   }
+   } else if (ret < 0) {
+       // fork failed, decrement
+       __sync_fetch_and_sub(&get_shm()->refcount, 1);
+   }       
 
    return ret;
 }
